@@ -5,7 +5,6 @@ package ftp
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -66,18 +65,6 @@ func Dial(addr string) (*ServerConn, error) {
 	return DialTimeout(addr, 0)
 }
 
-// DialImplicitTLS initializes the connection to the specified ftp server with implicit TLS
-//
-// It is generally followed by a call to Login() as most FTP commands require
-// an authenticated user.
-func DialImplicitTLS(addr string, config *tls.Config) (*ServerConn, error) {
-	tconn, err := tls.Dial("tcp", addr, config)
-	if err != nil {
-		return nil, err
-	}
-	return dialServer(tconn, 0)
-}
-
 // DialTimeout initializes the connection to the specified ftp server address.
 //
 // It is generally followed by a call to Login() as most FTP commands require
@@ -87,10 +74,12 @@ func DialTimeout(addr string, timeout time.Duration) (*ServerConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return dialServer(tconn, timeout)
+	return DialServer(tconn, timeout)
 }
 
-func dialServer(tconn net.Conn, timeout time.Duration) (*ServerConn, error) {
+// DialServer uses an established TCP connection to
+// create a ServerConn.
+func DialServer(tconn net.Conn, timeout time.Duration) (*ServerConn, error) {
 	// Use the resolved IP address in case addr contains a domain name
 	// If we use the domain name, we might not resolve to the same IP.
 	remoteAddr := tconn.RemoteAddr().(*net.TCPAddr)
@@ -204,10 +193,10 @@ func (c *ServerConn) setUTF8() error {
 		return err
 	}
 
-        // Workaround for FTP servers, that does not support this option.
-        if code == StatusBadArguments {
-                return nil
-        }
+	// Workaround for FTP servers, that does not support this option.
+	if code == StatusBadArguments {
+		return nil
+	}
 
 	// The ftpd "filezilla-server" has FEAT support for UTF8, but always returns
 	// "202 UTF8 mode is always enabled. No need to send this command." when

@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	testData = "Just some text"
-	testDir  = "mydir"
+	testData    = "Just some text"
+	testDir     = "mydir"
+	testHost    = "localhost:21"
+	testTimeout = 5 * time.Second
 )
 
 func isTLSServer() bool {
@@ -22,9 +24,14 @@ func isTLSServer() bool {
 
 func getConnection() (*ServerConn, error) {
 	if isTLSServer() {
-		return DialImplicitTLS("localhost:21", &tls.Config{InsecureSkipVerify: true})
+		tconn, err := tls.Dial("tcp", testHost, &tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			return nil, err
+		}
+		return DialServer(tconn, testTimeout)
 	}
-	return DialTimeout("localhost:21", 5*time.Second)
+
+	return DialTimeout(testHost, testTimeout)
 }
 
 func TestConnPASV(t *testing.T) {
