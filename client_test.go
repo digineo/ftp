@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -23,79 +26,55 @@ func TestConnEPSV(t *testing.T) {
 }
 
 func testConn(t *testing.T, disableEPSV bool) {
-
+	assert, require := assert.New(t), require.New(t)
 	mock, c := openConn(t, "127.0.0.1", DialWithTimeout(5*time.Second), DialWithDisabledEPSV(disableEPSV))
 
 	err := c.Login("anonymous", "anonymous")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
 	err = c.NoOp()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(err)
 
 	err = c.ChangeDir("incoming")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(err)
 
 	dir, err := c.CurrentDir()
-	if err != nil {
-		t.Error(err)
-	} else {
-		if dir != "/incoming" {
-			t.Error("Wrong dir: " + dir)
-		}
-	}
+	require.NoError(err)
+	require.Equal("/incoming", dir)
 
-	data := bytes.NewBufferString(testData)
-	err = c.Stor("test", data)
-	if err != nil {
-		t.Error(err)
-	}
+	err = c.Stor("test", bytes.NewBufferString(testData))
+	require.NoError(err)
 
 	_, err = c.List(".")
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(err)
 
 	err = c.Rename("test", "tset")
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(err)
 
 	// Read without deadline
 	r, err := c.Retr("tset")
-	if err != nil {
-		t.Error(err)
-	} else {
-		buf, err := ioutil.ReadAll(r)
-		if err != nil {
-			t.Error(err)
-		}
-		if string(buf) != testData {
-			t.Errorf("'%s'", buf)
-		}
-		r.Close()
-		r.Close() // test we can close two times
+	assert.NoError(err)
+
+	buf, err := ioutil.ReadAll(r)
+	if assert.NoError(err) {
+		assert.Equal(testData, string(buf))
 	}
+
+	r.Close()
+	r.Close() // test we can close two times
 
 	// Read with deadline
 	r, err = c.Retr("tset")
-	if err != nil {
+	require.NoError(err)
+
+	r.SetDeadline(time.Now())
+	_, err = ioutil.ReadAll(r)
+	if err == nil {
+		t.Error("deadline should have caused error")
+	} else if !strings.HasSuffix(err.Error(), "i/o timeout") {
 		t.Error(err)
-	} else {
-		r.SetDeadline(time.Now())
-		_, err := ioutil.ReadAll(r)
-		if err == nil {
-			t.Error("deadline should have caused error")
-		} else if !strings.HasSuffix(err.Error(), "i/o timeout") {
-			t.Error(err)
-		}
-		r.Close()
 	}
+	r.Close()
 
 	// Read with offset
 	r, err = c.RetrFrom("tset", 5)
@@ -115,9 +94,7 @@ func testConn(t *testing.T, disableEPSV bool) {
 
 	data2 := bytes.NewBufferString(testData)
 	err = c.Append("tset", data2)
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(err)
 
 	// Read without deadline, after append
 	r, err = c.Retr("tset")
@@ -135,50 +112,25 @@ func testConn(t *testing.T, disableEPSV bool) {
 	}
 
 	fileSize, err := c.FileSize("magic-file")
-	if err != nil {
-		t.Error(err)
-	}
-	if fileSize != 42 {
-		t.Errorf("file size %q, expected %q", fileSize, 42)
+	if assert.NoError(err) {
+		assert.EqualValues(42, fileSize)
 	}
 
 	_, err = c.FileSize("not-found")
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	assert.EqualError(err, "550 Could not get file size.")
 
-	err = c.Delete("tset")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = c.MakeDir(testDir)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = c.ChangeDir(testDir)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = c.ChangeDirToParent()
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(c.Delete("tset"))
+	assert.NoError(c.MakeDir(testDir))
+	assert.NoError(c.ChangeDir(testDir))
+	assert.NoError(c.ChangeDirToParent())
 
 	entries, err := c.NameList("/")
-	if err != nil {
-		t.Error(err)
-	}
-	if len(entries) != 1 || entries[0] != "/incoming" {
-		t.Errorf("Unexpected entries: %v", entries)
+	if assert.NoError(err) {
+		assert.Equal([]string{"/incoming"}, entries)
 	}
 
 	err = c.RemoveDir(testDir)
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(err)
 
 	err = c.Logout()
 	if err != nil {
@@ -191,35 +143,26 @@ func testConn(t *testing.T, disableEPSV bool) {
 		}
 	}
 
-	if err := c.Quit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(c.Quit())
 
 	// Wait for the connection to close
 	mock.Wait()
 
-	err = c.NoOp()
-	if err == nil {
-		t.Error("Expected error")
-	}
+	require.Error(c.NoOp())
 }
 
 // TestConnect tests the legacy Connect function
 func TestConnect(t *testing.T) {
+	require := require.New(t)
 	mock, err := newFtpMock(t, "127.0.0.1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 	defer mock.Close()
 
 	c, err := Connect(mock.Addr())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 
-	if err := c.Quit(); err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(c.Quit())
+
 	mock.Wait()
 }
 
@@ -227,44 +170,41 @@ func TestTimeout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
+	assert := assert.New(t)
 
-	c, err := DialTimeout("localhost:2121", 1*time.Second)
-	if err == nil {
-		t.Fatal("expected timeout, got nil error")
-		c.Quit()
+	_, err := DialTimeout("localhost:2121", 1*time.Second)
+	if assert.Error(err) {
+		assert.Contains(err.Error(), "connection refused")
 	}
 }
 
 func TestWrongLogin(t *testing.T) {
+	assert, require := assert.New(t), require.New(t)
+
 	mock, err := newFtpMock(t, "127.0.0.1")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 	defer mock.Close()
 
 	c, err := DialTimeout(mock.Addr(), 5*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(err)
 	defer c.Quit()
 
 	err = c.Login("zoo2Shia", "fei5Yix9")
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	if assert.Error(err) {
+		assert.Contains(err.Error(), "anonymous only")
 	}
 }
 
 func TestDeleteDirRecur(t *testing.T) {
+	require := require.New(t)
+
 	mock, c := openConn(t, "127.0.0.1")
 
 	err := c.RemoveDirRecur("testDir")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(err)
 
-	if err := c.Quit(); err != nil {
-		t.Fatal(err)
-	}
+	err = c.Quit()
+	require.NoError(err)
 
 	// Wait for the connection to close
 	mock.Wait()
@@ -287,16 +227,14 @@ func TestDeleteDirRecur(t *testing.T) {
 // }
 
 func TestMissingFolderDeleteDirRecur(t *testing.T) {
+	require := require.New(t)
 	mock, c := openConn(t, "127.0.0.1")
 
 	err := c.RemoveDirRecur("missing-dir")
-	if err == nil {
-		t.Fatal("expected error got nil")
-	}
+	require.EqualError(err, "550 missing-dir: No such file or directory")
 
-	if err := c.Quit(); err != nil {
-		t.Fatal(err)
-	}
+	// Close the connection
+	require.NoError(c.Quit())
 
 	// Wait for the connection to close
 	mock.Wait()

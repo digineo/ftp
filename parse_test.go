@@ -10,7 +10,7 @@ import (
 
 var (
 	// now is the current time for all tests
-	now = newTime(2017, time.March, 10, 23, 00)
+	now = newTime(2017, time.March, 10, 23, 0o0)
 
 	thisYear, _, _ = now.Date()
 	previousYear   = thisYear - 1

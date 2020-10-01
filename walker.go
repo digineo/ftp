@@ -4,7 +4,7 @@ import (
 	"path"
 )
 
-//Walker traverses the directory tree of a remote FTP server
+// Walker traverses the directory tree of a remote FTP server
 type Walker struct {
 	serverConn *ServerConn
 	root       string
@@ -35,7 +35,6 @@ func (w *Walker) Next() bool {
 
 	if w.descend && w.cur.entry.Type == EntryTypeFolder {
 		entries, err := w.serverConn.List(w.cur.path)
-
 		// an error occured, drop out and stop walking
 		if err != nil {
 			w.cur.err = err
@@ -71,14 +70,14 @@ func (w *Walker) Next() bool {
 	return true
 }
 
-//SkipDir tells the Next function to skip the currently processed directory
+// SkipDir tells the Next function to skip the currently processed directory
 func (w *Walker) SkipDir() {
 	w.descend = false
 }
 
-//Err returns the error, if any, for the most recent attempt by Next to
-//visit a file or a directory. If a directory has an error, the walker
-//will not descend in that directory
+// Err returns the error, if any, for the most recent attempt by Next to
+// visit a file or a directory. If a directory has an error, the walker
+// will not descend in that directory
 func (w *Walker) Err() error {
 	return w.cur.err
 }

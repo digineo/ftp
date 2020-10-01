@@ -8,9 +8,11 @@ import (
 	"time"
 )
 
-var errUnsupportedListLine = errors.New("unsupported LIST line")
-var errUnsupportedListDate = errors.New("unsupported LIST date")
-var errUnknownListEntryType = errors.New("unknown entry type")
+var (
+	errUnsupportedListLine  = errors.New("unsupported LIST line")
+	errUnsupportedListDate  = errors.New("unsupported LIST date")
+	errUnknownListEntryType = errors.New("unknown entry type")
+)
 
 type parseFunc func(string, time.Time, *time.Location) (*Entry, error)
 
@@ -63,7 +65,7 @@ func parseRFC3659ListLine(line string, now time.Time, loc *time.Location) (*Entr
 				e.Type = EntryTypeFile
 			}
 		case "size":
-			e.setSize(value)
+			return e, e.setSize(value)
 		}
 	}
 	return e, nil
@@ -72,7 +74,6 @@ func parseRFC3659ListLine(line string, now time.Time, loc *time.Location) (*Entr
 // parseLsListLine parses a directory line in a format based on the output of
 // the UNIX ls command.
 func parseLsListLine(line string, now time.Time, loc *time.Location) (*Entry, error) {
-
 	// Has the first field a length of exactly 10 bytes
 	// - or 10 bytes with an additional '+' character for indicating ACLs?
 	// If not, return.
@@ -220,7 +221,7 @@ func parseHostedFTPLine(line string, now time.Time, loc *time.Location) (*Entry,
 func parseListLine(line string, now time.Time, loc *time.Location) (*Entry, error) {
 	for _, f := range listLineParsers {
 		e, err := f(line, now, loc)
-		if err != errUnsupportedListLine {
+		if !errors.Is(err, errUnsupportedListLine) {
 			return e, err
 		}
 	}
@@ -253,7 +254,6 @@ func (e *Entry) setTime(fields []string, now time.Time, loc *time.Location) (err
 		if !e.Time.Before(now.AddDate(0, 6, 0)) {
 			e.Time = e.Time.AddDate(-1, 0, 0)
 		}
-
 	} else { // only the date
 		if len(fields[2]) != 4 {
 			return errUnsupportedListDate

@@ -323,7 +323,6 @@ func openConn(t *testing.T, addr string, options ...DialOption) (*ftpMock, *Serv
 	}
 
 	return mock, c
-
 }
 
 // Helper to close a client connected to a mock server
